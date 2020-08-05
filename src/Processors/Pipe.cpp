@@ -251,15 +251,22 @@ Pipe Pipe::unitePipes(Pipes pipes)
 
 Pipe Pipe::unitePipes(Pipes pipes, Processors * collected_processors)
 {
+    Pipe res;
+
+    for (auto & pipe : pipes)
+        res.holder = std::move(pipe.holder); /// see move assignment for Pipe::Holder.
+
     pipes = removeEmptyPipes(std::move(pipes));
 
     if (pipes.empty())
-        return {};
+        return res;
 
     if (pipes.size() == 1)
+    {
+        pipes[0].holder = std::move(res.holder);
         return std::move(pipes[0]);
+    }
 
-    Pipe res;
     OutputPortRawPtrs totals;
     OutputPortRawPtrs extremes;
     res.header = pipes.front().header;
@@ -270,7 +277,6 @@ Pipe Pipe::unitePipes(Pipes pipes, Processors * collected_processors)
         assertBlocksHaveEqualStructure(res.header, pipe.header, "Pipe::unitePipes");
         res.processors.insert(res.processors.end(), pipe.processors.begin(), pipe.processors.end());
         res.output_ports.insert(res.output_ports.end(), pipe.output_ports.begin(), pipe.output_ports.end());
-        res.holder = std::move(pipe.holder); /// see move assignment for Pipe::Holder.
 
         res.max_parallel_streams += pipe.max_parallel_streams;
 
