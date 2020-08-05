@@ -11,39 +11,10 @@
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-}
-
-static void checkSingleInput(const IProcessor & transform)
-{
-    if (transform.getInputs().size() != 1)
-        throw Exception("Processor for pipe should have single input, "
-                        "but " + transform.getName() + " has " +
-                        toString(transform.getInputs().size()) + " inputs.", ErrorCodes::LOGICAL_ERROR);
-}
-
-static void checkMultipleInputs(const IProcessor & transform, size_t num_inputs)
-{
-    if (transform.getInputs().size() != num_inputs)
-        throw Exception("Processor for pipe should have " + toString(num_inputs) + " inputs, "
-                        "but " + transform.getName() + " has " +
-                        toString(transform.getInputs().size()) + " inputs.", ErrorCodes::LOGICAL_ERROR);
-}
-
-static void checkSingleOutput(const IProcessor & transform)
-{
-    if (transform.getOutputs().size() != 1)
-        throw Exception("Processor for pipe should have single output, "
-                        "but " + transform.getName() + " has " +
-                        toString(transform.getOutputs().size()) + " outputs.", ErrorCodes::LOGICAL_ERROR);
-}
-
-static void checkSimpleTransform(const IProcessor & transform)
-{
-    checkSingleInput(transform);
-    checkSingleOutput(transform);
 }
 
 static void checkSource(const IProcessor & source)
@@ -190,7 +161,7 @@ Pipe::Pipe(ProcessorPtr source)
         checkSource(*source);
 
     if (collected_processors)
-        collected_processors->emplace_back(source.get());
+        collected_processors->emplace_back(source);
 
     output_ports.push_back(&source->getOutputs().front());
     header = output_ports.front()->getHeader();
@@ -248,7 +219,7 @@ Pipe::Pipe(Processors processors_) : processors(std::move(processors_))
 
     if (collected_processors)
         for (const auto & processor : processors)
-            collected_processors->emplace_back(processor.get());
+            collected_processors->emplace_back(processor);
 }
 
 static Pipes removeEmptyPipes(Pipes pipes)
@@ -315,12 +286,14 @@ Pipe Pipe::unitePipes(Pipes pipes, Processors * collected_processors)
         for (; num_processors < res.processors.size(); ++num_processors)
             res.collected_processors->emplace_back(res.processors[num_processors]);
     }
+
+    return res;
 }
 
 void Pipe::addSource(ProcessorPtr source)
 {
     checkSource(*source);
-    const auto & source_header = output_ports.front()->getHeader();
+    const auto & source_header = source->getOutputs().front().getHeader();
 
     if (output_ports.empty())
         header = source_header;
@@ -328,7 +301,7 @@ void Pipe::addSource(ProcessorPtr source)
         assertBlocksHaveEqualStructure(header, source_header, "Pipes");
 
     if (collected_processors)
-        collected_processors->emplace_back(source.get());
+        collected_processors->emplace_back(source);
 
     output_ports.push_back(&source->getOutputs().front());
     processors.emplace_back(std::move(source));
@@ -350,7 +323,7 @@ void Pipe::addTotalsSource(ProcessorPtr source)
     assertBlocksHaveEqualStructure(header, source_header, "Pipes");
 
     if (collected_processors)
-        collected_processors->emplace_back(source.get());
+        collected_processors->emplace_back(source);
 
     totals_port = &source->getOutputs().front();
     processors.emplace_back(std::move(source));
@@ -370,7 +343,7 @@ void Pipe::addExtremesSource(ProcessorPtr source)
     assertBlocksHaveEqualStructure(header, source_header, "Pipes");
 
     if (collected_processors)
-        collected_processors->emplace_back(source.get());
+        collected_processors->emplace_back(source);
 
     extremes_port = &source->getOutputs().front();
     processors.emplace_back(std::move(source));
@@ -385,7 +358,7 @@ static void dropPort(OutputPort *& port, Processors & processors, Processors * c
     connect(*port, null_sink->getPort());
 
     if (collected_processors)
-        collected_processors->emplace_back(null_sink.get());
+        collected_processors->emplace_back(null_sink);
 
     processors.emplace_back(std::move(null_sink));
     port = nullptr;
@@ -478,7 +451,7 @@ void Pipe::addTransform(ProcessorPtr transform, OutputPort * totals, OutputPort 
         assertBlocksHaveEqualStructure(header, extremes_port->getHeader(), "Pipes");
 
     if (collected_processors)
-        collected_processors->emplace_back(transform.get());
+        collected_processors->emplace_back(transform);
 
     processors.emplace_back(std::move(transform));
 
@@ -526,7 +499,7 @@ void Pipe::addSimpleTransform(const ProcessorGetterWithStreamKind & getter)
             port = &transform->getOutputs().front();
 
             if (collected_processors)
-                collected_processors->emplace_back(transform.get());
+                collected_processors->emplace_back(transform);
 
             processors.emplace_back(std::move(transform));
         }
@@ -614,7 +587,7 @@ void Pipe::setOutputFormat(ProcessorPtr output)
         addExtremesSource(std::make_shared<NullSource>(extremes.getHeader()));
 
     if (collected_processors)
-        collected_processors->emplace_back(output.get());
+        collected_processors->emplace_back(output);
 
     processors.emplace_back(std::move(output));
 
@@ -647,7 +620,8 @@ void Pipe::transform(const Transformer & transformer)
         set.emplace(&port->getProcessor());
     }
 
-    OutputPortRawPtrs new_output_ports;
+    output_ports.clear();
+
     for (const auto & processor : new_processors)
     {
         for (const auto & port : processor->getInputs())
@@ -667,7 +641,7 @@ void Pipe::transform(const Transformer & transformer)
         {
             if (!port.isConnected())
             {
-                new_output_ports.push_back(&port);
+                output_ports.push_back(&port);
                 continue;
             }
 
@@ -696,7 +670,7 @@ void Pipe::transform(const Transformer & transformer)
     if (collected_processors)
     {
         for (const auto & processor : processors)
-            collected_processors->emplace_back(processor.get());
+            collected_processors->emplace_back(processor);
     }
 
     processors.insert(processors.end(), new_processors.begin(), new_processors.end());
