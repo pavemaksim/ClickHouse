@@ -96,6 +96,14 @@ static OutputPort * uniteTotals(const OutputPortRawPtrs & ports, const Block & h
     return totals_port;
 }
 
+Pipe::Holder & Pipe::Holder::operator=(Holder && rhs)
+{
+    table_locks.insert(table_locks.end(), rhs.table_locks.begin(), rhs.table_locks.end());
+    storage_holders.insert(storage_holders.end(), rhs.storage_holders.begin(), rhs.storage_holders.end());
+    interpreter_context.insert(interpreter_context.end(),
+                               rhs.interpreter_context.begin(), rhs.interpreter_context.end());
+}
+
 Pipe::Pipe(ProcessorPtr source, OutputPort * output, OutputPort * totals, OutputPort * extremes)
 {
     if (!source->getInputs().empty())
@@ -262,10 +270,7 @@ Pipe Pipe::unitePipes(Pipes pipes, Processors * collected_processors)
         assertBlocksHaveEqualStructure(res.header, pipe.header, "Pipe::unitePipes");
         res.processors.insert(res.processors.end(), pipe.processors.begin(), pipe.processors.end());
         res.output_ports.insert(res.output_ports.end(), pipe.output_ports.begin(), pipe.output_ports.end());
-        res.table_locks.insert(res.table_locks.end(), pipe.table_locks.begin(), pipe.table_locks.end());
-        res.storage_holders.insert(res.storage_holders.end(), pipe.storage_holders.begin(), pipe.storage_holders.end());
-        res.interpreter_context.insert(res.interpreter_context.end(),
-                                       pipe.interpreter_context.begin(), pipe.interpreter_context.end());
+        res.holder = std::move(pipe.holder); /// see move assignment for Pipe::Holder.
 
         res.max_parallel_streams += pipe.max_parallel_streams;
 
