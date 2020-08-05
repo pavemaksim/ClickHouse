@@ -252,7 +252,7 @@ Pipe StorageBuffer::read(
     if (!pipe_from_buffers.empty() && !pipe_from_dst.empty()
         && !blocksHaveEqualStructure(pipe_from_buffers.getHeader(), pipe_from_dst.getHeader()))
     {
-        pipe_from_buffers.addSimpleTransform([&](const Block & header)
+        pipe_from_dst.addSimpleTransform([&](const Block & header)
         {
             return std::make_shared<ConvertingTransform>(
                    header,
